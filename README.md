@@ -1,4 +1,5 @@
 # healthcheck
+[![Codecov](https://img.shields.io/codecov/c/github/rmasclef/healthcheck.svg?style=flat&maxAge=60)]()
 [![Build Status](https://travis-ci.org/rmasclef/healthcheck.svg?branch=master)](https://travis-ci.org/rmasclef/healthcheck)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rmasclef/healthcheck)](https://goreportcard.com/report/github.com/rmasclef/healthcheck)
 [![GoDoc](https://godoc.org/github.com/rmasclef/healthcheck?status.svg)](https://godoc.org/github.com/rmasclef/healthcheck)
