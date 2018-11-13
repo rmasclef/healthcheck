@@ -10,4 +10,4 @@ install:
     && dep ensure -vendor-only -v
 
 script:
-  - go test -v -cover .
+  - go test -v -cover ./...
