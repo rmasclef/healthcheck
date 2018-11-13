@@ -12,30 +12,51 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package healthcheck
+package handlers
 
 import (
 	"encoding/json"
 	"net/http"
+	"os"
 	"sync"
+
+	"github.com/rmasclef/healthcheck/checks"
 )
 
-// basicHandler is a basic Handler implementation.
+const livenessPatternEnvVar = "HEALTH_LIVENESS_PATTERN"
+const readynessPatternEnvVar = "HEALTH_READYNESS_PATTERN"
+
+const defaultLivenessPattern = "/live"
+const defaultReadynessPattern = "/ready"
+
 type basicHandler struct {
 	http.ServeMux
 	checksMutex     sync.RWMutex
-	livenessChecks  map[string]Check
-	readinessChecks map[string]Check
+	livenessChecks  map[string]healthcheck.Check
+	readinessChecks map[string]healthcheck.Check
+	metadata 		map[string]string
 }
 
-// NewHandler creates a new basic Handler
-func NewHandler() Handler {
+// creates a handlers that listens on /live & /ready
+// and returns liveness and readiness statuses for each provided livenessChecks & readynessChecks
+// it also returns metadata in each response
+func NewHandler(options Options) Handler {
 	h := &basicHandler{
-		livenessChecks:  make(map[string]Check),
-		readinessChecks: make(map[string]Check),
+		livenessChecks:  make(map[string]healthcheck.Check),
+		readinessChecks: make(map[string]healthcheck.Check),
+		metadata: 		 make(map[string]string),
 	}
-	h.Handle("/live", http.HandlerFunc(h.LiveEndpoint))
-	h.Handle("/ready", http.HandlerFunc(h.ReadyEndpoint))
+	// Set the metadata that will be return on each http response
+	if options.Metadata != nil { h.metadata = options.Metadata }
+
+	// Get live & ready endpoint patterns from env vars
+	livenessPattern, ok := os.LookupEnv(livenessPatternEnvVar)
+	readynessPattern, ok := os.LookupEnv(readynessPatternEnvVar)
+	if !ok { livenessPattern = defaultLivenessPattern }
+	if !ok { readynessPattern = defaultReadynessPattern }
+
+	h.Handle(livenessPattern, http.HandlerFunc(h.LiveEndpoint))
+	h.Handle(readynessPattern, http.HandlerFunc(h.ReadyEndpoint))
 	return h
 }
 
@@ -47,19 +68,19 @@ func (s *basicHandler) ReadyEndpoint(w http.ResponseWriter, r *http.Request) {
 	s.handle(w, r, s.readinessChecks, s.livenessChecks)
 }
 
-func (s *basicHandler) AddLivenessCheck(name string, check Check) {
+func (s *basicHandler) AddLivenessCheck(name string, check healthcheck.Check) {
 	s.checksMutex.Lock()
 	defer s.checksMutex.Unlock()
 	s.livenessChecks[name] = check
 }
 
-func (s *basicHandler) AddReadinessCheck(name string, check Check) {
+func (s *basicHandler) AddReadinessCheck(name string, check healthcheck.Check) {
 	s.checksMutex.Lock()
 	defer s.checksMutex.Unlock()
 	s.readinessChecks[name] = check
 }
 
-func (s *basicHandler) collectChecks(checks map[string]Check, resultsOut map[string]string, statusOut *int) {
+func (s *basicHandler) collectChecks(checks map[string]healthcheck.Check, resultsOut map[string]string, statusOut *int) {
 	s.checksMutex.RLock()
 	defer s.checksMutex.RUnlock()
 	for name, check := range checks {
@@ -72,16 +93,20 @@ func (s *basicHandler) collectChecks(checks map[string]Check, resultsOut map[str
 	}
 }
 
-func (s *basicHandler) handle(w http.ResponseWriter, r *http.Request, checks ...map[string]Check) {
+func (s *basicHandler) handle(w http.ResponseWriter, r *http.Request, checks ...map[string]healthcheck.Check) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	checkResults := make(map[string]string)
+	checkResults := &response{
+		Checks: make(map[string]string),
+		Metadata: s.metadata,
+	}
+
 	status := http.StatusOK
 	for _, checks := range checks {
-		s.collectChecks(checks, checkResults, &status)
+		s.collectChecks(checks, checkResults.Checks, &status)
 	}
 
 	// write out the response code and content type header

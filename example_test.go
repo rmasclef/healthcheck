@@ -27,11 +27,14 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/rmasclef/healthcheck/checks"
+	"github.com/rmasclef/healthcheck/handlers"
 )
 
 func Example() {
 	// Create a Handler that we can use to register liveness and readiness checks.
-	health := NewHandler()
+	health := handlers.NewHandler(handlers.Options{})
 
 	// Add a readiness check to make sure an upstream dependency resolves in DNS.
 	// If this fails we don't want to receive requests, but we shouldn't be
@@ -39,11 +42,11 @@ func Example() {
 	upstreamHost := "upstream.example.com"
 	health.AddReadinessCheck(
 		"upstream-dep-dns",
-		DNSResolveCheck(upstreamHost, 50*time.Millisecond))
+		healthcheck.DNSResolveCheck(upstreamHost, 50*time.Millisecond))
 
 	// Add a liveness check to detect Goroutine leaks. If this fails we want
 	// to be restarted/rescheduled.
-	health.AddLivenessCheck("goroutine-threshold", GoroutineCountCheck(100))
+	health.AddLivenessCheck("goroutine-threshold", healthcheck.GoroutineCountCheck(100))
 
 	// Serve http://0.0.0.0:8080/live and http://0.0.0.0:8080/ready endpoints.
 	// go http.ListenAndServe("0.0.0.0:8080", health)
@@ -65,11 +68,14 @@ func Example_database() {
 	database = connectToDatabase()
 
 	// Create a Handler that we can use to register liveness and readiness checks.
-	health := NewHandler()
+	// Add some metadata on it
+	health := handlers.NewHandler(handlers.Options{
+		Metadata: map[string]string{"foo": "bar"},
+	})
 
 	// Add a readiness check to we don't receive requests unless we can reach
 	// the database with a ping in <1 second.
-	health.AddReadinessCheck("database", DatabasePingCheck(database, 1*time.Second))
+	health.AddReadinessCheck("database", healthcheck.DatabasePingCheck(database, 1*time.Second))
 
 	// Serve http://0.0.0.0:8080/live and http://0.0.0.0:8080/ready endpoints.
 	// go http.ListenAndServe("0.0.0.0:8080", health)
@@ -83,13 +89,18 @@ func Example_database() {
 	// Content-Type: application/json; charset=utf-8
 	//
 	// {
-	//     "database": "OK"
+	//     "Checks": {
+	//         "database": "OK"
+	//     },
+	//     "Metadata": {
+	//         "foo": "bar"
+	//     }
 	// }
 }
 
 func Example_advanced() {
 	// Create a Handler that we can use to register liveness and readiness checks.
-	health := NewHandler()
+	health := handlers.NewHandler(handlers.Options{})
 
 	// Make sure we can connect to an upstream dependency over TCP in less than
 	// 50ms. Run this check asynchronously in the background every 10 seconds
@@ -100,16 +111,16 @@ func Example_advanced() {
 	upstreamAddr := "upstream.example.com:5432"
 	health.AddReadinessCheck(
 		"upstream-dep-tcp",
-		Async(TCPDialCheck(upstreamAddr, 50*time.Millisecond), 10*time.Second))
+		healthcheck.Async(healthcheck.TCPDialCheck(upstreamAddr, 50*time.Millisecond), 10*time.Second))
 
 	// Add a readiness check against the health of an upstream HTTP dependency
 	upstreamURL := "http://upstream-svc.example.com:8080/healthy"
 	health.AddReadinessCheck(
 		"upstream-dep-http",
-		HTTPGetCheck(upstreamURL, 500*time.Millisecond))
+		healthcheck.HTTPGetCheck(upstreamURL, 500*time.Millisecond))
 
 	// Implement a custom check with a 50 millisecond timeout.
-	health.AddLivenessCheck("custom-check-with-timeout", Timeout(func() error {
+	health.AddLivenessCheck("custom-check-with-timeout", healthcheck.Timeout(func() error {
 		// Simulate some work that could take a long time
 		time.Sleep(time.Millisecond * 100)
 		return nil
@@ -123,7 +134,7 @@ func Example_advanced() {
 	})
 	mux.HandleFunc("/healthz", health.ReadyEndpoint)
 
-	// Sleep for just a moment to make sure our Async handler had a chance to run
+	// Sleep for just a moment to make sure our Async handlers had a chance to run
 	time.Sleep(500 * time.Millisecond)
 
 	// Make a sample request to the /healthz endpoint and print the response.
@@ -143,7 +154,7 @@ func Example_metrics() {
 
 	// Create a metrics-exposing Handler for the Prometheus registry
 	// The healthcheck related metrics will be prefixed with the provided namespace
-	health := NewMetricsHandler(registry, "example")
+	health := handlers.NewMetricsHandler(registry, "example", handlers.Options{})
 
 	// Add a simple readiness check that always fails.
 	health.AddReadinessCheck("failing-check", func() error {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package healthcheck
+package handlers
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ import (
 )
 
 func TestNewMetricsHandler(t *testing.T) {
-	handler := NewMetricsHandler(prometheus.DefaultRegisterer, "test")
+	handler := NewMetricsHandler(prometheus.DefaultRegisterer, "test", Options{})
 
 	for _, check := range []string{"aaa", "bbb", "ccc"} {
 		handler.AddLivenessCheck(check, func() error {
@@ -73,7 +73,7 @@ test_healthcheck_status{check="fff"} 1
 }
 
 func TestNewMetricsHandlerEndpoints(t *testing.T) {
-	handler := NewMetricsHandler(prometheus.NewRegistry(), "test")
+	handler := NewMetricsHandler(prometheus.NewRegistry(), "test", Options{})
 	handler.AddReadinessCheck("fail", func() error {
 		return fmt.Errorf("failing readiness check")
 	})

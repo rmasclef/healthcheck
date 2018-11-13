@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package healthcheck
+package handlers
 
 import (
 	"errors"
@@ -82,7 +82,7 @@ func TestNewHandler(t *testing.T) {
 			live:       true,
 			ready:      false,
 			expect:     http.StatusOK,
-			expectBody: "{}\n",
+			expectBody: "{\n    \"Checks\": {},\n    \"Metadata\": {\n        \"some fake metadata\": \"fake value\"\n    }\n}\n",
 		},
 		{
 			name:       "with a failing readiness check, /ready should fail",
@@ -91,7 +91,7 @@ func TestNewHandler(t *testing.T) {
 			live:       true,
 			ready:      false,
 			expect:     http.StatusServiceUnavailable,
-			expectBody: "{\n    \"test-readiness-check\": \"failed readiness check\"\n}\n",
+			expectBody: "{\n    \"Checks\": {\n        \"test-readiness-check\": \"failed readiness check\"\n    },\n    \"Metadata\": {\n        \"some fake metadata\": \"fake value\"\n    }\n}\n",
 		},
 		{
 			name:       "with a failing liveness check, /live should fail",
@@ -100,7 +100,7 @@ func TestNewHandler(t *testing.T) {
 			live:       false,
 			ready:      true,
 			expect:     http.StatusServiceUnavailable,
-			expectBody: "{\n    \"test-liveness-check\": \"failed liveness check\"\n}\n",
+			expectBody: "{\n    \"Checks\": {\n        \"test-liveness-check\": \"failed liveness check\"\n    },\n    \"Metadata\": {\n        \"some fake metadata\": \"fake value\"\n    }\n}\n",
 		},
 		{
 			name:       "with a failing liveness check, /ready should fail",
@@ -109,7 +109,7 @@ func TestNewHandler(t *testing.T) {
 			live:       false,
 			ready:      true,
 			expect:     http.StatusServiceUnavailable,
-			expectBody: "{\n    \"test-liveness-check\": \"failed liveness check\"\n}\n",
+			expectBody: "{\n    \"Checks\": {\n        \"test-liveness-check\": \"failed liveness check\"\n    },\n    \"Metadata\": {\n        \"some fake metadata\": \"fake value\"\n    }\n}\n",
 		},
 		{
 			name:       "with a failing liveness check, /ready without full=1 should fail with an empty body",
@@ -123,7 +123,11 @@ func TestNewHandler(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := NewHandler()
+			h := NewHandler(Options{
+				Metadata: map[string]string{
+					"some fake metadata": "fake value",
+				},
+			})
 
 			if !tt.live {
 				h.AddLivenessCheck("test-liveness-check", func() error {
