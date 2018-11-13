@@ -1,7 +1,7 @@
 # healthcheck
-[![Build Status](https://travis-ci.org/heptiolabs/healthcheck.svg?branch=master)](https://travis-ci.org/heptiolabs/healthcheck)
-[![Go Report Card](https://goreportcard.com/badge/github.com/heptiolabs/healthcheck)](https://goreportcard.com/report/github.com/heptiolabs/healthcheck)
-[![GoDoc](https://godoc.org/github.com/heptiolabs/healthcheck?status.svg)](https://godoc.org/github.com/heptiolabs/healthcheck)
+[![Build Status](https://travis-ci.org/rmasclef/healthcheck.svg?branch=master)](https://travis-ci.org/rmasclef/healthcheck)
+[![Go Report Card](https://goreportcard.com/badge/github.com/rmasclef/healthcheck)](https://goreportcard.com/report/github.com/rmasclef/healthcheck)
+[![GoDoc](https://godoc.org/github.com/rmasclef/healthcheck?status.svg)](https://godoc.org/github.com/rmasclef/healthcheck)
 
 Healthcheck is a library for implementing Kubernetes [liveness and readiness](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-probes/) probe handlers in your Go application.
 
@@ -17,16 +17,23 @@ Healthcheck is a library for implementing Kubernetes [liveness and readiness](ht
 
 ## Usage
 
-See the [GoDoc examples](https://godoc.org/github.com/heptiolabs/healthcheck) for more detail.
+See the [GoDoc examples](https://godoc.org/github.com/rmasclef/healthcheck) for more detail.
 
  - Install with `go get` or your favorite Go dependency manager: `go get -u github.com/heptiolabs/healthcheck`
 
- - Import the package: `import "github.com/heptiolabs/healthcheck"`
+ - Import the package: `import "github.com/heptiolabs/healthcheck/checks"` & `import "github.com/heptiolabs/healthcheck/handlers"`
 
  - Create a `healthcheck.Handler`:
    ```go
-   health := healthcheck.NewHandler()
+   health := handlers.NewHandler(handlers.Options{})
    ```
+You can also pass some metadata when creating a handler. Those metadata will be returned by the Endpoints
+   ```go
+   health := handlers.NewHandler(handlers.Options{
+      Metadata: map[string]string{"foo": "bar"},
+   })
+   ```
+> A great use case can be to pass the app-name, the app-version and the commit number in order to know which commit is making the app unhealthy
 
  - Configure some application-specific liveness checks (whether the app itself is unhealthy):
    ```go
@@ -83,10 +90,29 @@ See the [GoDoc examples](https://godoc.org/github.com/heptiolabs/healthcheck) fo
 
  - If one of your liveness checks fails or your app becomes totally unresponsive, Kubernetes will restart your container.
 
- ## HTTP Endpoints
- When you run `go http.ListenAndServe("0.0.0.0:8086", health)`, two HTTP endpoints are exposed:
+## HTTP Endpoints
+### Default routes
+When you run `go http.ListenAndServe("0.0.0.0:8086", health)`, two HTTP endpoints are exposed:
 
   - **`/live`**: liveness endpoint (HTTP 200 if healthy, HTTP 503 if unhealthy)
   - **`/ready`**: readiness endpoint (HTTP 200 if healthy, HTTP 503 if unhealthy)
 
+### Custom routes
+You can also use other routes than **/live** & **/ready** by setting the `HEALTH_LIVENESS_PATTERN` and/or `HEALTH_READYNESS_PATTERN` env var on your application
+
+### Endpoint response
 Pass the `?full=1` query parameter to see the full check results as JSON. These are omitted by default for performance.
+
+JSON result will look like this:
+```json
+{
+  "Checks": {
+    "test-readiness-check": "failed readiness check",
+    "redis-check":  "error message from check"
+  },
+  "Metadata": {
+    "some fake metadata": "fake value",
+    "app_name":  "fake service name"
+  }
+}
+```
